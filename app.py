@@ -1,50 +1,91 @@
 import streamlit as st
+import numpy as np
+import pandas as pd
+import joblib
+import time
+from database import PredictED_Database
+
+# Initialization
 st.set_page_config(page_title="PredictED | ED Overcrowding", layout="wide")
 st.title("🏥 PredictED: Early Warning System")
-st.markdown("Live predictions of Emergency Department capacity breaches.")
-st.sidebar.header("Current ED Conditions")
-st.sidebar.caption("Adjust sliders to simulate hospital load:")
-total_ed_patients = st.sidebar.slider("Total ED Patients", 0, 120, 45)
-total_ed_beds = st.sidebar.number_input("Total ED Beds", value=40)
-admits_waiting = st.sidebar.slider("Admitted Patients Waiting for Beds", 0, 40, 20)
-total_hospital_beds = st.sidebar.number_input("Total Hospital Beds", value=350)
-vent_patients = st.sidebar.slider("Patients on Ventilators", 0, 15, 7)
-longest_admit_wait = st.sidebar.slider("Longest Admit Wait (Hours)", 0.0, 24.0, 4.5)
-last_patient_wait = st.sidebar.slider("Last Patient Wait Time (Hours)", 0.0, 12.0, 1.5)
+@st.cache_resource
+def load_model():
+    return joblib.load("predictED_rf_model.joblib")
+model = load_model()
+db = PredictED_Database()
 
-#placeholder for future ML model integration
-def calculate_current_nedocs():
-    # Avoid div by zero
-    A = max(1, total_ed_beds)
-    B = max(1, total_hospital_beds)
+st.sidebar.header("System Control")
+use_live_hardware = st.sidebar.toggle("🔴 LIVE HARDWARE SENSORS", value=False)
+st.sidebar.divider()
+
+st.sidebar.header("Clinical Conditions")
+ed_pts = st.sidebar.slider("Total ED Patients", 0, 120, 45)
+ed_beds = st.sidebar.number_input("Total ED Beds", value=40)
+admits = st.sidebar.slider("Admitted Patients Waiting", 0, 40, 10)
+hosp_beds = st.sidebar.number_input("Total Hospital Beds", value=350)
+vents = st.sidebar.slider("Patients on Ventilators", 0, 15, 2)
+longest_wait = st.sidebar.slider("Longest Admit Wait (Hrs)", 0.0, 24.0, 4.5)
+last_wait = st.sidebar.slider("Last Patient Wait (Hrs)", 0.0, 12.0, 1.5)
+
+if use_live_hardware:
+    st.toast("Fetching live telemetry from Edge Sensors...", icon="📡")
+    sensor_data = db.get_temporal_features(window_minutes=15)
     
-    score = (85.8 * (total_ed_patients / A)) + \
-            (600 * (admits_waiting / B)) + \
-            (13.4 * vent_patients) + \
-            (0.93 * longest_admit_wait) + \
-            (5.64 * last_patient_wait) - 20
-    return max(0, round(score, 1))
+    arrival_velocity = sensor_data['arrival_velocity']
+    chaos_index = sensor_data['equipment_chaos_index']
+    noise_db = sensor_data['ambient_noise_db']
+    
+    st.sidebar.success("Sensors: ONLINE")
+    st.sidebar.metric("Arrival Velocity (Pts/Min)", arrival_velocity)
+    st.sidebar.metric("Equipment Chaos (0-10)", chaos_index)
+else:
+    #default when hardware is off
+    arrival_velocity = 0.5
+    chaos_index = 1.0
+    noise_db = 55.0
+    st.sidebar.info("Sensors: OFFLINE (Manual Mode)")
 
-current_score = calculate_current_nedocs()
+# AI PREDICTION LOGIC 
+feature_names = [
+    'ed_pts', 'ed_beds', 'admits', 'hosp_beds', 'vents', 
+    'longest_wait', 'last_wait', 'arrival_velocity', 'equipment_chaos_index'
+]
+input_array = np.array([[
+    ed_pts, ed_beds, admits, hosp_beds, vents, 
+    longest_wait, last_wait, arrival_velocity, chaos_index
+]])
+predicted_score = model.predict(input_array)[0]
 
-#Main dashboard layout
+
 col1, col2 = st.columns(2)
-
 with col1:
-    st.subheader("Current NEDOCS Score")
-    if current_score < 60:
-        st.success(f"Score: {current_score} (Normal)")
-    elif current_score < 100:
-        st.warning(f"Score: {current_score} (Busy)")
-    elif current_score < 140:
-        st.error(f"Score: {current_score} (Overcrowded)")
+    st.subheader("Hardware Status")
+    if use_live_hardware:
+        st.info("Input mode: **Live Edge IoT Network**")
+        if chaos_index > 6.0:
+            st.error("⚠️ HIGH PHYSICAL CHAOS DETECTED")
     else:
-        st.error(f"🚨 Score: {current_score} (CRITICAL DISASTER)")
-        
+        st.info("Input mode: **Manual Simulation**")
 with col2:
-    st.subheader("🤖 AI 2-Hour Prediction")
-    st.info("Awaiting Machine Learning Model integration (Hour 4)...")
+    st.subheader("🤖 AI 2-Hour Forecast")
+    if predicted_score < 60:
+        st.success(f"Predicted Score: {predicted_score:.1f} (Normal capacity)")
+    elif predicted_score < 100:
+        st.warning(f"Predicted Score: {predicted_score:.1f} (Busy - Monitor closely)")
+    elif predicted_score < 140:
+        st.error(f"Predicted Score: {predicted_score:.1f} (OVERCROWDED)")
+    else:
+        st.error(f"🚨 Predicted Score: {predicted_score:.1f} (CRITICAL CAPACITY)")
+if use_live_hardware:
+    time.sleep(5)
+    st.rerun()
+
 
 st.divider()
-st.subheader("Model Feature Importance")
-st.text("[Bar chart will appear here once Random Forest model is connected]")
+st.subheader("Crisis Drivers")
+importances = model.feature_importances_
+importance_df = pd.DataFrame({
+    'Factor': ['Total ED Patients', 'Total ED Beds', 'Admits Waiting', 'Total Hosp Beds', 'Vent Patients', 'Longest Wait', 'Last Patient Wait', 'Arrival Velocity (Hardware)', 'Equipment Chaos (Hardware)'],
+    'Impact Weight': importances
+}).sort_values(by='Impact Weight', ascending=True)
+st.bar_chart(importance_df, x='Factor', y='Impact Weight', color="#ff4b4b", height=300)

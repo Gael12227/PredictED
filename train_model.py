@@ -6,7 +6,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 import joblib
 
 print("Loading dataset...")
-df = pd.read_csv("master_hospital_data.csv") 
+df = pd.read_csv("upgraded_temporal_data.csv") 
 
 features = [
     'ed_pts', 
@@ -15,7 +15,9 @@ features = [
     'hosp_beds', 
     'vents', 
     'longest_wait', 
-    'last_wait'
+    'last_wait',
+    'arrival_velocity',
+    'equipment_chaos_index',
 ]
 print("Shifting temporal target variable (T+2 hrs)...")
 df['target_nedocs_2hr'] = df['nedocs_score'].shift(-2)
