@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"name": "PredictED",
+			"path": "."
+		},
+		{
+			"name": "Vector 2",
+			"path": "../Vector 2"
+		},
+		{
+			"name": "Vector 1 Inflow",
+			"path": "Vector 1 Inflow"
+		},
+		{
+			"name": "Vector 2 Crash Cart",
+			"path": "Vector 2 Crash Cart"
+		}
+	],
+	"settings": {}
+}
