@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.python-version
+
+# Node (portable toolchain downloaded into .tools/)
+.tools/
+node_modules/
+dist/
+.vite/
+
+# Runtime artifacts
+.server.log
+*.log
+node.ready
+
+# Databases / OS
+*.db-journal
+*.db-wal
+*.db-shm
+.DS_Store
+Thumbs.db

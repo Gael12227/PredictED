@@ -1,0 +1,23 @@
+# Optional local MQTT broker for PredictED's hardware ingestion path.
+#
+#   docker compose up -d mosquitto
+#   PREDICTED_MQTT_HOST=127.0.0.1 PREDICTED_DEMO_MODE=never \
+#     .venv/Scripts/python -m uvicorn backend.main:app --port 8000
+#   .venv/Scripts/python -m backend.ingestion.simulator --mqtt   # publishes streams
+#
+# Real devices can publish to predictED/state (EMR census) and
+# predictED/sensor (ultrasound_inflow / imu_variance / mic_decibels).
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: predicted-mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    restart: unless-stopped
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:
